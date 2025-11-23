@@ -26,6 +26,7 @@
 #include <include/paddleocr.h>
 #include <include/paddlestructure.h>
 #include <include/task.h>
+#include <include/http_server.h>
 
 using namespace PaddleOCR;
 
@@ -114,6 +115,15 @@ int main(int argc, char **argv)
     {
         std::cerr << "[ERROR] " << checkMsg << std::endl;
         return 1;
+    }
+
+    // 检查是否启用HTTP服务器模式
+    if (FLAGS_server)
+    {
+        std::cout << "Starting HTTP server mode..." << std::endl;
+        HttpServer server(FLAGS_server_port);
+        server.start();
+        return 0;
     }
 
     // 启动任务

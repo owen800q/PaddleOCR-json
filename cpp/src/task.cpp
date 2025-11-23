@@ -240,6 +240,29 @@ namespace PaddleOCR
         }
     }
 
+    // 直接传入cv::Mat进行OCR，返回json字符串（用于HTTP服务器）
+    std::string Task::run_ocr_mat(cv::Mat img)
+    {
+        if (img.empty())
+        { // 图片为空
+            return get_state_json(CODE_ERR_BASE64_IM_DECODE, "Invalid image data");
+        }
+        // 执行OCR
+        std::vector<OCRPredictResult> res_ocr = ppocr->ocr(img, FLAGS_det, FLAGS_rec, FLAGS_cls);
+        // 获取结果
+        std::string res_json = get_ocr_result_json(res_ocr);
+        // 结果1：识别成功，无文字（rec未检出）
+        if (res_json.empty())
+        {
+            return get_state_json(CODE_OK_NONE, "No text found in image");
+        }
+        // 结果2：识别成功，有文字
+        else
+        {
+            return res_json;
+        }
+    }
+
     void Task::init_engine()
     {
         auto init_start = std::chrono::steady_clock::now();

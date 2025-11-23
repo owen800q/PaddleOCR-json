@@ -330,6 +330,9 @@ endif()
 if (NOT WIN32)
     set(EXTERNAL_LIB "-ldl -lrt -lgomp -lz -lm -lpthread")
     set(DEPS ${DEPS} ${EXTERNAL_LIB})
+    # Add pthread explicitly for cpp-httplib
+    find_package(Threads REQUIRED)
+    set(DEPS ${DEPS} Threads::Threads)
 endif()
 
 # 在find_package时已经指定了需要加载的模块，
