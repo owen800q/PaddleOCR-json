@@ -20,6 +20,8 @@
 DECLARE_string(image_path);
 DECLARE_int32(port);
 DECLARE_string(addr);
+DECLARE_bool(server);
+DECLARE_int32(server_port);
 
 // common args
 DECLARE_bool(use_gpu);

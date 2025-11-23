@@ -5,6 +5,8 @@
 #define TASK_H
 
 #include "include/nlohmann/json.hpp" // json库
+#include "include/paddleocr.h" // OCR引擎
+#include "opencv2/core.hpp" // cv::Mat
 
 namespace PaddleOCR
 {
@@ -66,6 +68,8 @@ namespace PaddleOCR
 
     public:
         int ocr(); // OCR图片
+        void init_engine(); // 初始化OCR引擎（公开给HTTP服务器使用）
+        std::string run_ocr_mat(cv::Mat img); // 直接传入Mat进行OCR，返回json字符串
 
     private:
         bool is_exit = false;         // 为true时退出任务循环
@@ -74,7 +78,6 @@ namespace PaddleOCR
         std::string t_msg;            // 本轮任务状态消息
 
         // 任务流程
-        void init_engine();               // 初始化OCR引擎
         void memory_check_cleanup();        // 检查内存占用，达到上限时释放内存
         std::string run_ocr(std::string); // 输入用户传入值（字符串），返回结果json字符串
         int single_image_mode();          // 单次识别模式
