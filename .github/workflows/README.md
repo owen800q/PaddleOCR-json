@@ -79,11 +79,11 @@ Caches are shared across workflow runs and significantly reduce build times.
 ### Runtime Dependencies
 
 **Linux:**
-- Downloaded automatically: PaddlePaddle 2.6.1, OpenCV 4.5.4
+- Downloaded automatically: PaddlePaddle 3.0.0-beta1, OpenCV 4.5.4
 - System libraries for dynamic linking
 
 **Windows:**
-- Downloaded automatically: PaddlePaddle 2.6.1, OpenCV 4.5.4
+- Downloaded automatically: PaddlePaddle 3.0.0-beta1, OpenCV 4.5.4
 - Visual C++ Redistributable 2022 (required on user machines)
 
 ## Customization
@@ -94,7 +94,7 @@ Edit the environment variables in `build-release.yml`:
 
 ```yaml
 env:
-  PADDLE_VERSION: '2.6.1'
+  PADDLE_VERSION: '3.0.0-beta1'
   OPENCV_VERSION: '4.5.4'
 ```
 
