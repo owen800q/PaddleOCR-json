@@ -120,12 +120,10 @@ jobs:
         wget -q https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/ppocr_keys_v1.txt -O dict_chinese.txt
 
         # Create config file
-        cat > config_chinese.txt << 'EOF'
-det_model_dir=ch_PP-OCRv4_det_infer
-cls_model_dir=ch_ppocr_mobile_v2.0_cls_infer
-rec_model_dir=ch_PP-OCRv4_rec_infer
-rec_char_dict_path=dict_chinese.txt
-EOF
+        echo "det_model_dir=ch_PP-OCRv4_det_infer" > config_chinese.txt
+        echo "cls_model_dir=ch_ppocr_mobile_v2.0_cls_infer" >> config_chinese.txt
+        echo "rec_model_dir=ch_PP-OCRv4_rec_infer" >> config_chinese.txt
+        echo "rec_char_dict_path=dict_chinese.txt" >> config_chinese.txt
 
     - name: Build PaddleOCR-json
       working-directory: cpp
@@ -234,12 +232,10 @@ EOF
         Invoke-WebRequest -Uri "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/ppocr_keys_v1.txt" -OutFile dict_chinese.txt
 
         # Create config file
-        @"
-det_model_dir=ch_PP-OCRv4_det_infer
-cls_model_dir=ch_ppocr_mobile_v2.0_cls_infer
-rec_model_dir=ch_PP-OCRv4_rec_infer
-rec_char_dict_path=dict_chinese.txt
-"@ | Out-File -FilePath config_chinese.txt -Encoding ASCII
+        "det_model_dir=ch_PP-OCRv4_det_infer" | Out-File -FilePath config_chinese.txt -Encoding ASCII
+        "cls_model_dir=ch_ppocr_mobile_v2.0_cls_infer" | Out-File -FilePath config_chinese.txt -Encoding ASCII -Append
+        "rec_model_dir=ch_PP-OCRv4_rec_infer" | Out-File -FilePath config_chinese.txt -Encoding ASCII -Append
+        "rec_char_dict_path=dict_chinese.txt" | Out-File -FilePath config_chinese.txt -Encoding ASCII -Append
 
     - name: Build PaddleOCR-json
       working-directory: cpp
