@@ -72,7 +72,7 @@ Caches are shared across workflow runs and significantly reduce build times.
 - System libraries: libgomp1, libglib2.0-0, libsm6, libxext6, libxrender-dev
 
 **Windows:**
-- Visual Studio 2019
+- Visual Studio 2022
 - CMake 3.14+
 - MSBuild
 
@@ -84,7 +84,7 @@ Caches are shared across workflow runs and significantly reduce build times.
 
 **Windows:**
 - Downloaded automatically: PaddlePaddle 2.6.1, OpenCV 4.5.4
-- Visual C++ Redistributable 2019 (required on user machines)
+- Visual C++ Redistributable 2022 (required on user machines)
 
 ## Customization
 
@@ -179,7 +179,7 @@ mkdir .source, build
 
 The workflow uses:
 - `ubuntu-20.04` for Linux builds
-- `windows-2019` for Windows builds
+- `windows-2022` for Windows builds
 
 Update these in the `runs-on` fields when newer stable versions are available.
 

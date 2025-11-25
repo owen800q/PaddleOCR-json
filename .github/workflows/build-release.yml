@@ -152,7 +152,7 @@ jobs:
         retention-days: 7
 
   build-windows:
-    runs-on: windows-2019
+    runs-on: windows-2022
 
     steps:
     - name: Checkout code
@@ -244,7 +244,7 @@ jobs:
         mkdir build
         cd build
         cmake .. ^
-          -G "Visual Studio 16 2019" ^
+          -G "Visual Studio 17 2022" ^
           -A x64 ^
           -DCMAKE_BUILD_TYPE=Release ^
           -DPADDLE_LIB=%GITHUB_WORKSPACE%\cpp\.source\paddle_inference ^
@@ -337,7 +337,7 @@ jobs:
 
           ### Requirements
           - Linux: Ubuntu 18.04+ or compatible
-          - Windows: Windows 10+ with Visual C++ Redistributable 2019
+          - Windows: Windows 10+ with Visual C++ Redistributable 2022
           - Models: Download from [PaddleOCR Model Zoo](https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.7/doc/doc_en/models_list_en.md)
         files: |
           ./artifacts/PaddleOCR-json-linux-x64.tar.gz
