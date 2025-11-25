@@ -12,7 +12,7 @@ on:
         default: ''
 
 env:
-  PADDLE_VERSION: '2.6.1'
+  PADDLE_VERSION: '3.0.0-beta1'
   OPENCV_VERSION: '4.5.4'
 
 jobs:
@@ -50,7 +50,7 @@ jobs:
       run: |
         mkdir -p .source
         cd .source
-        wget -q https://paddle-inference-lib.bj.bcebos.com/2.6.1/cxx_c/Linux/CPU/gcc8.2_avx_mkl/paddle_inference.tgz
+        wget -q https://paddle-inference-lib.bj.bcebos.com/3.0.0-beta1/cxx_c/Linux/CPU/gcc8.2_avx_mkl/paddle_inference.tgz
         tar -xzf paddle_inference.tgz
         rm paddle_inference.tgz
         mv paddle_inference paddle_inference_manylinux_cpu_avx_mkl_gcc8.2
@@ -175,30 +175,10 @@ jobs:
       run: |
         New-Item -ItemType Directory -Force -Path .source
         cd .source
-        # Try multiple URL patterns for PaddlePaddle 2.6.1 Windows
-        $urls = @(
-          "https://paddle-inference-lib.bj.bcebos.com/2.6.1/cxx_c/Windows/CPU/vs2019_avx_mkl/paddle_inference.zip",
-          "https://paddle-inference-lib.bj.bcebos.com/2.6.1/cxx_c/Windows/CPU/x86-64_vs2019_avx_mkl/paddle_inference.zip",
-          "https://paddle-inference-lib.bj.bcebos.com/2.5.2/cxx_c/Windows/CPU/x86-64_avx_mkl_vs2019/paddle_inference.zip"
-        )
-
-        $downloaded = $false
-        foreach ($url in $urls) {
-          Write-Host "Trying: $url"
-          try {
-            Invoke-WebRequest -Uri $url -OutFile paddle_inference.zip -ErrorAction Stop
-            Write-Host "Successfully downloaded from: $url"
-            $downloaded = $true
-            break
-          } catch {
-            Write-Host "Failed: $_"
-          }
-        }
-
-        if (-not $downloaded) {
-          throw "Failed to download PaddlePaddle inference library from all URLs"
-        }
-
+        # Download PaddlePaddle 3.0.0-beta1 for Windows
+        $url = "https://paddle-inference-lib.bj.bcebos.com/3.0.0-beta1/cxx_c/Windows/CPU/x86-64_avx-mkl-vs2019/paddle_inference.zip"
+        Write-Host "Downloading PaddlePaddle from: $url"
+        Invoke-WebRequest -Uri $url -OutFile paddle_inference.zip
         Expand-Archive -Path paddle_inference.zip -DestinationPath .
         Remove-Item paddle_inference.zip
 
