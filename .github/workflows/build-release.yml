@@ -1,0 +1,352 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag (e.g., v1.4.1)'
+        required: false
+        default: ''
+
+env:
+  PADDLE_VERSION: '2.6.1'
+  OPENCV_VERSION: '4.5.4'
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          wget \
+          unzip \
+          libgomp1 \
+          libglib2.0-0 \
+          libsm6 \
+          libxext6 \
+          libxrender-dev
+
+    - name: Cache PaddlePaddle
+      id: cache-paddle-linux
+      uses: actions/cache@v3
+      with:
+        path: cpp/.source/paddle_inference_manylinux_cpu_avx_mkl_gcc8.2
+        key: paddle-linux-${{ env.PADDLE_VERSION }}-avx-mkl
+
+    - name: Download PaddlePaddle Inference Library
+      if: steps.cache-paddle-linux.outputs.cache-hit != 'true'
+      working-directory: cpp
+      run: |
+        mkdir -p .source
+        cd .source
+        wget -q https://paddle-inference-lib.bj.bcebos.com/2.6.1/cxx_c/Linux/CPU/gcc8.2_avx_mkl/paddle_inference.tgz
+        tar -xzf paddle_inference.tgz
+        rm paddle_inference.tgz
+        mv paddle_inference paddle_inference_manylinux_cpu_avx_mkl_gcc8.2
+
+    - name: Cache OpenCV
+      id: cache-opencv-linux
+      uses: actions/cache@v3
+      with:
+        path: cpp/.source/opencv-4.5.4
+        key: opencv-linux-${{ env.OPENCV_VERSION }}
+
+    - name: Download and Build OpenCV
+      if: steps.cache-opencv-linux.outputs.cache-hit != 'true'
+      working-directory: cpp
+      run: |
+        mkdir -p .source
+        cd .source
+        wget -q -O opencv.zip https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.zip
+        unzip -q opencv.zip
+        cd opencv-${OPENCV_VERSION}
+        mkdir build && cd build
+        cmake -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX=../../opencv-${OPENCV_VERSION} \
+              -DBUILD_LIST=core,imgproc,imgcodecs \
+              -DBUILD_SHARED_LIBS=ON \
+              -DBUILD_TESTS=OFF \
+              -DBUILD_PERF_TESTS=OFF \
+              -DBUILD_EXAMPLES=OFF \
+              -DWITH_FFMPEG=OFF \
+              -DWITH_GTK=OFF \
+              -DWITH_V4L=OFF \
+              -DWITH_OPENEXR=OFF \
+              ..
+        cmake --build . --config Release -j$(nproc)
+        cmake --install .
+        cd ../..
+        rm -rf opencv-${OPENCV_VERSION}/build opencv.zip
+
+    - name: Cache OCR Models
+      id: cache-models
+      uses: actions/cache@v3
+      with:
+        path: cpp/.source/models
+        key: ocr-models-v4
+
+    - name: Download OCR Models
+      if: steps.cache-models.outputs.cache-hit != 'true'
+      working-directory: cpp
+      run: |
+        mkdir -p .source/models
+        cd .source/models
+
+        # Download Chinese OCR models
+        wget -q https://paddleocr.bj.bcebos.com/PP-OCRv4/chinese/ch_PP-OCRv4_det_infer.tar
+        tar -xf ch_PP-OCRv4_det_infer.tar
+        rm ch_PP-OCRv4_det_infer.tar
+
+        wget -q https://paddleocr.bj.bcebos.com/PP-OCRv4/chinese/ch_PP-OCRv4_rec_infer.tar
+        tar -xf ch_PP-OCRv4_rec_infer.tar
+        rm ch_PP-OCRv4_rec_infer.tar
+
+        wget -q https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar
+        tar -xf ch_ppocr_mobile_v2.0_cls_infer.tar
+        rm ch_ppocr_mobile_v2.0_cls_infer.tar
+
+        # Download dictionary
+        wget -q https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/ppocr_keys_v1.txt -O dict_chinese.txt
+
+        # Create config file
+        cat > config_chinese.txt << 'EOF'
+det_model_dir=ch_PP-OCRv4_det_infer
+cls_model_dir=ch_ppocr_mobile_v2.0_cls_infer
+rec_model_dir=ch_PP-OCRv4_rec_infer
+rec_char_dict_path=dict_chinese.txt
+EOF
+
+    - name: Build PaddleOCR-json
+      working-directory: cpp
+      run: |
+        mkdir -p build && cd build
+        cmake .. \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DPADDLE_LIB=${GITHUB_WORKSPACE}/cpp/.source/paddle_inference_manylinux_cpu_avx_mkl_gcc8.2 \
+          -DOPENCV_DIR=${GITHUB_WORKSPACE}/cpp/.source/opencv-${OPENCV_VERSION} \
+          -DWITH_MKL=ON \
+          -DWITH_GPU=OFF \
+          -DWITH_STATIC_LIB=OFF
+        cmake --build . --config Release -j$(nproc)
+
+    - name: Package Linux Binary
+      run: |
+        cd cpp/build/bin
+        tar -czf PaddleOCR-json-linux-x64.tar.gz PaddleOCR-json *.so*
+        mv PaddleOCR-json-linux-x64.tar.gz ${GITHUB_WORKSPACE}/
+
+    - name: Upload Linux Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: PaddleOCR-json-linux-x64
+        path: PaddleOCR-json-linux-x64.tar.gz
+        retention-days: 7
+
+  build-windows:
+    runs-on: windows-2019
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v1.1
+
+    - name: Cache PaddlePaddle
+      id: cache-paddle-windows
+      uses: actions/cache@v3
+      with:
+        path: cpp/.source/paddle_inference
+        key: paddle-windows-${{ env.PADDLE_VERSION }}-mkl
+
+    - name: Download PaddlePaddle Inference Library
+      if: steps.cache-paddle-windows.outputs.cache-hit != 'true'
+      working-directory: cpp
+      shell: pwsh
+      run: |
+        New-Item -ItemType Directory -Force -Path .source
+        cd .source
+        Invoke-WebRequest -Uri "https://paddle-inference-lib.bj.bcebos.com/2.6.1/cxx_c/Windows/CPU/x86-64_vs2019_avx_mkl/paddle_inference.zip" -OutFile paddle_inference.zip
+        Expand-Archive -Path paddle_inference.zip -DestinationPath .
+        Remove-Item paddle_inference.zip
+
+    - name: Cache OpenCV
+      id: cache-opencv-windows
+      uses: actions/cache@v3
+      with:
+        path: cpp/.source/opencv
+        key: opencv-windows-${{ env.OPENCV_VERSION }}
+
+    - name: Download OpenCV
+      if: steps.cache-opencv-windows.outputs.cache-hit != 'true'
+      working-directory: cpp
+      shell: pwsh
+      run: |
+        New-Item -ItemType Directory -Force -Path .source
+        cd .source
+        Invoke-WebRequest -Uri "https://github.com/opencv/opencv/releases/download/${env:OPENCV_VERSION}/opencv-${env:OPENCV_VERSION}-vc14_vc15.exe" -OutFile opencv.exe
+        Start-Process -FilePath ".\opencv.exe" -ArgumentList "-o.", "-y" -Wait
+        Move-Item -Path "opencv" -Destination "opencv-temp"
+        Move-Item -Path "opencv-temp\build" -Destination "opencv"
+        Remove-Item -Recurse -Force "opencv-temp"
+        Remove-Item opencv.exe
+
+    - name: Cache OCR Models
+      id: cache-models-windows
+      uses: actions/cache@v3
+      with:
+        path: cpp/.source/models
+        key: ocr-models-v4
+
+    - name: Download OCR Models
+      if: steps.cache-models-windows.outputs.cache-hit != 'true'
+      working-directory: cpp
+      shell: pwsh
+      run: |
+        New-Item -ItemType Directory -Force -Path .source/models
+        cd .source/models
+
+        # Download Chinese OCR models
+        Invoke-WebRequest -Uri "https://paddleocr.bj.bcebos.com/PP-OCRv4/chinese/ch_PP-OCRv4_det_infer.tar" -OutFile det.tar
+        tar -xf det.tar
+        Remove-Item det.tar
+
+        Invoke-WebRequest -Uri "https://paddleocr.bj.bcebos.com/PP-OCRv4/chinese/ch_PP-OCRv4_rec_infer.tar" -OutFile rec.tar
+        tar -xf rec.tar
+        Remove-Item rec.tar
+
+        Invoke-WebRequest -Uri "https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar" -OutFile cls.tar
+        tar -xf cls.tar
+        Remove-Item cls.tar
+
+        # Download dictionary
+        Invoke-WebRequest -Uri "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/ppocr_keys_v1.txt" -OutFile dict_chinese.txt
+
+        # Create config file
+        @"
+det_model_dir=ch_PP-OCRv4_det_infer
+cls_model_dir=ch_ppocr_mobile_v2.0_cls_infer
+rec_model_dir=ch_PP-OCRv4_rec_infer
+rec_char_dict_path=dict_chinese.txt
+"@ | Out-File -FilePath config_chinese.txt -Encoding ASCII
+
+    - name: Build PaddleOCR-json
+      working-directory: cpp
+      shell: cmd
+      run: |
+        mkdir build
+        cd build
+        cmake .. ^
+          -G "Visual Studio 16 2019" ^
+          -A x64 ^
+          -DCMAKE_BUILD_TYPE=Release ^
+          -DPADDLE_LIB=%GITHUB_WORKSPACE%\cpp\.source\paddle_inference ^
+          -DOPENCV_DIR=%GITHUB_WORKSPACE%\cpp\.source\opencv ^
+          -DWITH_MKL=ON ^
+          -DWITH_GPU=OFF ^
+          -DWITH_STATIC_LIB=ON
+        cmake --build . --config Release -j %NUMBER_OF_PROCESSORS%
+
+    - name: Package Windows Binary
+      working-directory: cpp/build/bin/Release
+      shell: pwsh
+      run: |
+        Compress-Archive -Path PaddleOCR-json.exe,*.dll -DestinationPath ${env:GITHUB_WORKSPACE}\PaddleOCR-json-windows-x64.zip
+
+    - name: Upload Windows Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: PaddleOCR-json-windows-x64
+        path: PaddleOCR-json-windows-x64.zip
+        retention-days: 7
+
+  create-release:
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event.inputs.release_tag != ''
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Determine release tag
+      id: get_tag
+      run: |
+        if [ "${{ github.event_name }}" == "push" ]; then
+          TAG=${GITHUB_REF#refs/tags/}
+        else
+          TAG="${{ github.event.inputs.release_tag }}"
+        fi
+        echo "tag=${TAG}" >> $GITHUB_OUTPUT
+        echo "Release tag: ${TAG}"
+
+    - name: Download Linux Artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: PaddleOCR-json-linux-x64
+        path: ./artifacts
+
+    - name: Download Windows Artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: PaddleOCR-json-windows-x64
+        path: ./artifacts
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.get_tag.outputs.tag }}
+        name: Release ${{ steps.get_tag.outputs.tag }}
+        body: |
+          ## PaddleOCR-json Release ${{ steps.get_tag.outputs.tag }}
+
+          ### HTTP Server Features
+          - RESTful API with JSON responses
+          - Multipart form-data file uploads (POST /api/ocr)
+          - Base64 image support (POST /api/ocr/base64)
+          - Health check endpoint (GET /api/health)
+          - Version info endpoint (GET /api/version)
+
+          ### Downloads
+          - **Linux x64**: PaddleOCR-json-linux-x64.tar.gz
+          - **Windows x64**: PaddleOCR-json-windows-x64.zip
+
+          ### Usage
+
+          **Command Line:**
+          ```bash
+          ./PaddleOCR-json --image_path=test.jpg
+          ```
+
+          **HTTP Server Mode:**
+          ```bash
+          ./PaddleOCR-json --server --server_port=8080 --models_path=models --config_path=models/config_chinese.txt
+          ```
+
+          **Test with curl:**
+          ```bash
+          curl -X POST http://localhost:8080/api/ocr -F "image=@test.jpg"
+          ```
+
+          ### Requirements
+          - Linux: Ubuntu 18.04+ or compatible
+          - Windows: Windows 10+ with Visual C++ Redistributable 2019
+          - Models: Download from [PaddleOCR Model Zoo](https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.7/doc/doc_en/models_list_en.md)
+        files: |
+          ./artifacts/PaddleOCR-json-linux-x64.tar.gz
+          ./artifacts/PaddleOCR-json-windows-x64.zip
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
