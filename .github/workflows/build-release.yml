@@ -186,22 +186,56 @@ jobs:
       id: cache-opencv-windows
       uses: actions/cache@v3
       with:
-        path: cpp/.source/opencv
-        key: opencv-windows-${{ env.OPENCV_VERSION }}
+        path: cpp/.source/opencv-4.5.4
+        key: opencv-windows-${{ env.OPENCV_VERSION }}-vs2022
 
-    - name: Download OpenCV
+    - name: Download and Build OpenCV
       if: steps.cache-opencv-windows.outputs.cache-hit != 'true'
       working-directory: cpp
       shell: pwsh
       run: |
         New-Item -ItemType Directory -Force -Path .source
         cd .source
-        Invoke-WebRequest -Uri "https://github.com/opencv/opencv/releases/download/${env:OPENCV_VERSION}/opencv-${env:OPENCV_VERSION}-vc14_vc15.exe" -OutFile opencv.exe
-        Start-Process -FilePath ".\opencv.exe" -ArgumentList "-o.", "-y" -Wait
-        Move-Item -Path "opencv" -Destination "opencv-temp"
-        Move-Item -Path "opencv-temp\build" -Destination "opencv"
-        Remove-Item -Recurse -Force "opencv-temp"
-        Remove-Item opencv.exe
+        # Download OpenCV source code
+        Invoke-WebRequest -Uri "https://github.com/opencv/opencv/archive/${env:OPENCV_VERSION}.zip" -OutFile opencv.zip
+        Expand-Archive -Path opencv.zip -DestinationPath .
+        cd opencv-${env:OPENCV_VERSION}
+
+        # Create build directory
+        New-Item -ItemType Directory -Force -Path build
+        cd build
+
+        # Configure OpenCV build with minimal modules for OCR
+        cmake .. `
+          -G "Visual Studio 17 2022" `
+          -A x64 `
+          -DCMAKE_BUILD_TYPE=Release `
+          -DCMAKE_INSTALL_PREFIX="../../opencv-${env:OPENCV_VERSION}" `
+          -DBUILD_LIST=core,imgproc,imgcodecs `
+          -DBUILD_SHARED_LIBS=ON `
+          -DBUILD_TESTS=OFF `
+          -DBUILD_PERF_TESTS=OFF `
+          -DBUILD_EXAMPLES=OFF `
+          -DWITH_FFMPEG=OFF `
+          -DWITH_GTK=OFF `
+          -DWITH_V4L=OFF `
+          -DWITH_OPENEXR=OFF `
+          -DBUILD_opencv_python2=OFF `
+          -DBUILD_opencv_python3=OFF `
+          -DBUILD_opencv_java=OFF `
+          -DBUILD_opencv_apps=OFF `
+          -DBUILD_opencv_js=OFF
+
+        # Build OpenCV
+        cmake --build . --config Release -j $env:NUMBER_OF_PROCESSORS
+
+        # Install OpenCV
+        cmake --install . --config Release
+
+        # Clean up build files to save cache space
+        cd ../..
+        Remove-Item -Recurse -Force opencv-${env:OPENCV_VERSION}/build
+        Remove-Item opencv.zip
 
     - name: Cache OCR Models
       id: cache-models-windows
@@ -251,7 +285,7 @@ jobs:
           -A x64 ^
           -DCMAKE_BUILD_TYPE=Release ^
           -DPADDLE_LIB=%GITHUB_WORKSPACE%\cpp\.source\paddle_inference ^
-          -DOPENCV_DIR=%GITHUB_WORKSPACE%\cpp\.source\opencv ^
+          -DOPENCV_DIR=%GITHUB_WORKSPACE%\cpp\.source\opencv-4.5.4 ^
           -DWITH_MKL=ON ^
           -DWITH_GPU=OFF ^
           -DWITH_STATIC_LIB=ON
