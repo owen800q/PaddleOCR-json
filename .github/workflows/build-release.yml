@@ -166,7 +166,7 @@ jobs:
       uses: actions/cache@v3
       with:
         path: cpp/.source/paddle_inference
-        key: paddle-windows-${{ env.PADDLE_VERSION }}-mkl
+        key: paddle-windows-${{ env.PADDLE_VERSION }}-mkl-v2
 
     - name: Download PaddlePaddle Inference Library
       if: steps.cache-paddle-windows.outputs.cache-hit != 'true'
