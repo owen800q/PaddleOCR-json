@@ -291,6 +291,7 @@ jobs:
           -DPADDLE_LIB=%GITHUB_WORKSPACE%\cpp\.source\paddle_inference ^
           -DOPENCV_DIR=%GITHUB_WORKSPACE%\cpp\.source\opencv-4.5.4 ^
           -DOpenCV_DIR=%GITHUB_WORKSPACE%\cpp\.source\opencv-4.5.4 ^
+          -DCMAKE_PREFIX_PATH=%GITHUB_WORKSPACE%\cpp\.source\opencv-4.5.4 ^
           -DWITH_MKL=ON ^
           -DWITH_GPU=OFF ^
           -DWITH_STATIC_LIB=ON
