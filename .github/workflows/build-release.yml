@@ -186,10 +186,8 @@ jobs:
       id: cache-opencv-windows
       uses: actions/cache@v3
       with:
-        path: |
-          cpp/.source/opencv-build
-          cpp/.source/opencv-install
-        key: opencv-windows-${{ env.OPENCV_VERSION }}-vs2022-build-v2
+        path: cpp/.source/opencv-install
+        key: opencv-windows-${{ env.OPENCV_VERSION }}-vs2022-install
 
     - name: Download and Build OpenCV
       if: steps.cache-opencv-windows.outputs.cache-hit != 'true'
@@ -234,12 +232,9 @@ jobs:
         # Install OpenCV
         cmake --install . --config Release
 
-        # Move build directory to preserve it for CMake config
+        # Clean up source and build directories to save cache space
+        # Only keep opencv-install which has everything we need
         cd ../..
-        Move-Item -Path "opencv-${env:OPENCV_VERSION}/build" -Destination "opencv-build" -Force
-
-        # Keep opencv-install directory (it was created by cmake --install)
-        # Clean up only source files to save cache space
         Remove-Item -Recurse -Force opencv-${env:OPENCV_VERSION}
         Remove-Item opencv.zip
 
@@ -247,13 +242,9 @@ jobs:
         Write-Host "`nOpenCV install directory contents:"
         Get-ChildItem -Path opencv-install -Depth 1 | Select-Object FullName
 
-        # Debug: Show OpenCV build directory structure
-        Write-Host "OpenCV build directory structure:"
-        Get-ChildItem -Path opencv-build -Depth 2 | Select-Object FullName
-
-        # Check for OpenCVConfig.cmake location
-        Write-Host "`nSearching for OpenCVConfig.cmake:"
-        Get-ChildItem -Path opencv-build -Filter "OpenCVConfig.cmake" -Recurse | Select-Object FullName
+        # Verify OpenCVConfig.cmake exists in install directory
+        Write-Host "`nSearching for OpenCVConfig.cmake in install directory:"
+        Get-ChildItem -Path opencv-install -Filter "OpenCVConfig.cmake" -Recurse | Select-Object FullName
 
     - name: Cache OCR Models
       id: cache-models-windows
@@ -303,8 +294,7 @@ jobs:
           -A x64 ^
           -DCMAKE_BUILD_TYPE=Release ^
           -DPADDLE_LIB=%GITHUB_WORKSPACE%\cpp\.source\paddle_inference ^
-          -DOPENCV_DIR=%GITHUB_WORKSPACE%\cpp\.source\opencv-build ^
-          -DCMAKE_PREFIX_PATH="%GITHUB_WORKSPACE%\cpp\.source\opencv-install;%GITHUB_WORKSPACE%\cpp\.source\opencv-build" ^
+          -DOPENCV_DIR=%GITHUB_WORKSPACE%\cpp\.source\opencv-install ^
           -DWITH_MKL=ON ^
           -DWITH_GPU=OFF ^
           -DWITH_STATIC_LIB=ON
@@ -315,6 +305,7 @@ jobs:
       shell: pwsh
       run: |
         # Copy OpenCV DLLs from install directory
+        # Check common install locations
         if (Test-Path ".source/opencv-install/bin") {
             $opencvDlls = Get-ChildItem -Path ".source/opencv-install/bin" -Filter "*.dll" -ErrorAction SilentlyContinue
             if ($opencvDlls) {
@@ -322,20 +313,11 @@ jobs:
                 Copy-Item -Path ".source/opencv-install/bin/*.dll" -Destination "build/bin/Release/" -Force
             }
         }
-        # Also check x64/vc17/bin structure (typical for Windows builds)
         if (Test-Path ".source/opencv-install/x64/vc17/bin") {
             $opencvDlls = Get-ChildItem -Path ".source/opencv-install/x64/vc17/bin" -Filter "*.dll" -ErrorAction SilentlyContinue
             if ($opencvDlls) {
                 Write-Host "Copying OpenCV DLLs from install/x64/vc17/bin to output directory"
                 Copy-Item -Path ".source/opencv-install/x64/vc17/bin/*.dll" -Destination "build/bin/Release/" -Force
-            }
-        }
-        # Fallback: check build directory
-        if (Test-Path ".source/opencv-build/bin/Release") {
-            $opencvBuildDlls = Get-ChildItem -Path ".source/opencv-build/bin/Release" -Filter "*.dll" -ErrorAction SilentlyContinue
-            if ($opencvBuildDlls) {
-                Write-Host "Copying OpenCV DLLs from build/bin/Release to output directory"
-                Copy-Item -Path ".source/opencv-build/bin/Release/*.dll" -Destination "build/bin/Release/" -Force
             }
         }
 
