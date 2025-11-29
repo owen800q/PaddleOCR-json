@@ -40,6 +40,16 @@ if (UNIX AND NOT APPLE) # Linux
     set(WITH_STATIC_LIB OFF)
 endif ()
 
+if (APPLE)
+    # macOS doesn't support static linking with PaddlePaddle
+    set(WITH_STATIC_LIB OFF)
+    # MKL is Intel-only, macOS ARM uses OpenBLAS or Accelerate
+    if (CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
+        set(WITH_MKL OFF)
+        message(STATUS "macOS ARM64 detected, disabling MKL (using OpenBLAS instead)")
+    endif()
+endif ()
+
 # 依赖库路径相关参数
 SET(PADDLE_LIB "" CACHE PATH "paddle_inference的路径")
 SET(OPENCV_DIR "" CACHE PATH "库的路径。Linux下，如果已经安装到系统之中就不用指定了。")
@@ -172,10 +182,28 @@ else()
     if(WITH_MKL)
         set(FLAG_OPENMP "-fopenmp")
     endif()
-    # 在Linux环境下使用 `-g -o3` 无法编译
-    # https://github.com/PaddlePaddle/PaddleOCR/issues/4654#issuecomment-977398981
-    # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -o3 ${FLAG_OPENMP} -std=c++11")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${FLAG_OPENMP} -std=c++11")
+    # macOS ARM64 specific handling
+    if (APPLE)
+        # macOS requires C++14 minimum for some features
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
+        # OpenMP on macOS requires libomp from Homebrew or similar
+        if(WITH_MKL)
+            # Check if libomp is available
+            find_library(OMP_LIB omp PATHS /opt/homebrew/opt/libomp/lib /usr/local/opt/libomp/lib)
+            if(OMP_LIB)
+                set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Xpreprocessor -fopenmp")
+                include_directories(/opt/homebrew/opt/libomp/include /usr/local/opt/libomp/include)
+            else()
+                message(STATUS "OpenMP not found on macOS, building without OpenMP support")
+            endif()
+        endif()
+    else()
+        # Linux
+        # 在Linux环境下使用 `-g -o3` 无法编译
+        # https://github.com/PaddlePaddle/PaddleOCR/issues/4654#issuecomment-977398981
+        # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -o3 ${FLAG_OPENMP} -std=c++11")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${FLAG_OPENMP} -std=c++11")
+    endif()
     set(CMAKE_STATIC_LIBRARY_PREFIX "")
     message(STATUS "cmake cxx flags:" ${CMAKE_CXX_FLAGS})
 endif()
@@ -328,7 +356,17 @@ endif()
 
 
 if (NOT WIN32)
-    set(EXTERNAL_LIB "-ldl -lrt -lgomp -lz -lm -lpthread")
+    if (APPLE)
+        # macOS doesn't have -lrt, and uses different OpenMP library
+        set(EXTERNAL_LIB "-ldl -lz -lm -lpthread")
+        # Add OpenMP library if found
+        if(OMP_LIB)
+            set(DEPS ${DEPS} ${OMP_LIB})
+        endif()
+    else()
+        # Linux
+        set(EXTERNAL_LIB "-ldl -lrt -lgomp -lz -lm -lpthread")
+    endif()
     set(DEPS ${DEPS} ${EXTERNAL_LIB})
     # Add pthread explicitly for cpp-httplib
     find_package(Threads REQUIRED)
@@ -490,20 +528,41 @@ else()
     endforeach()
     
     if (INSTALL_WITH_TOOLS)
-        # 安装启动脚本和安装脚本
-        install(
-            FILES
-                "${CMAKE_CURRENT_SOURCE_DIR}/tools/linux_dist_tools/run.sh"
-                "${CMAKE_CURRENT_SOURCE_DIR}/tools/linux_dist_tools/install_env.sh"
-            PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
-            DESTINATION "."
-        )
-        # 安装README.txt
-        install(
-            FILES
-                "${CMAKE_CURRENT_SOURCE_DIR}/tools/linux_dist_tools/README.txt"
-            PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ GROUP_WRITE WORLD_READ
-            DESTINATION "."
-        )
+        if (APPLE)
+            # macOS distribution tools
+            if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tools/macos_dist_tools/run.sh")
+                install(
+                    FILES
+                        "${CMAKE_CURRENT_SOURCE_DIR}/tools/macos_dist_tools/run.sh"
+                    PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+                    DESTINATION "."
+                )
+            endif()
+            if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tools/macos_dist_tools/README.txt")
+                install(
+                    FILES
+                        "${CMAKE_CURRENT_SOURCE_DIR}/tools/macos_dist_tools/README.txt"
+                    PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ GROUP_WRITE WORLD_READ
+                    DESTINATION "."
+                )
+            endif()
+        else()
+            # Linux distribution tools
+            # 安装启动脚本和安装脚本
+            install(
+                FILES
+                    "${CMAKE_CURRENT_SOURCE_DIR}/tools/linux_dist_tools/run.sh"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/tools/linux_dist_tools/install_env.sh"
+                PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+                DESTINATION "."
+            )
+            # 安装README.txt
+            install(
+                FILES
+                    "${CMAKE_CURRENT_SOURCE_DIR}/tools/linux_dist_tools/README.txt"
+                PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ GROUP_WRITE WORLD_READ
+                DESTINATION "."
+            )
+        endif()
     endif()
 endif()

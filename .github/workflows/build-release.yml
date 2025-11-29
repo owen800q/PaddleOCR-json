@@ -368,8 +368,174 @@ jobs:
         path: PaddleOCR-json-windows-x64.zip
         retention-days: 7
 
+  build-macos-arm:
+    runs-on: macos-14  # macos-14 is ARM64 (M1/M2)
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        brew install cmake wget libomp
+
+    - name: Cache PaddlePaddle
+      id: cache-paddle-macos
+      uses: actions/cache@v3
+      with:
+        path: cpp/.source/paddle_inference
+        key: paddle-macos-arm64-${{ env.PADDLE_VERSION }}-v2
+
+    - name: Download and Build PaddlePaddle Inference Library
+      if: steps.cache-paddle-macos.outputs.cache-hit != 'true'
+      working-directory: cpp
+      run: |
+        mkdir -p .source
+        cd .source
+
+        # PaddlePaddle doesn't provide official ARM64 macOS inference library
+        # We'll build a minimal version from source or use the CPU inference library
+        # For now, try to download the macOS x86_64 version and see if it works via Rosetta 2
+        # or build from source
+
+        # Check if ARM64 macOS build is available
+        PADDLE_URL="https://paddle-inference-lib.bj.bcebos.com/${PADDLE_VERSION}/cxx_c/MacOS/CPU/arm64/paddle_inference.tgz"
+
+        if wget -q --spider "$PADDLE_URL" 2>/dev/null; then
+          echo "Downloading PaddlePaddle ARM64 macOS build..."
+          wget -q "$PADDLE_URL" -O paddle_inference.tgz
+          tar -xzf paddle_inference.tgz
+          rm paddle_inference.tgz
+        else
+          echo "ARM64 macOS build not available, building from source..."
+
+          # Clone and build PaddlePaddle inference library
+          git clone --depth 1 --branch v${PADDLE_VERSION} https://github.com/PaddlePaddle/Paddle.git paddle_src
+          cd paddle_src
+
+          mkdir build && cd build
+          cmake .. \
+            -DWITH_GPU=OFF \
+            -DWITH_MKL=OFF \
+            -DWITH_TESTING=OFF \
+            -DWITH_PYTHON=OFF \
+            -DON_INFER=ON \
+            -DCMAKE_BUILD_TYPE=Release
+
+          cmake --build . --target paddle_inference --config Release -j$(sysctl -n hw.ncpu)
+
+          # Install to the expected location
+          mkdir -p ../../paddle_inference
+          cp -r paddle_inference_install_dir/* ../../paddle_inference/
+
+          cd ../..
+          rm -rf paddle_src
+        fi
+
+        # Verify the installation
+        ls -la paddle_inference/
+
+    - name: Cache OpenCV
+      id: cache-opencv-macos
+      uses: actions/cache@v3
+      with:
+        path: cpp/.source/opencv-4.5.4
+        key: opencv-macos-arm64-${{ env.OPENCV_VERSION }}-v2
+
+    - name: Download and Build OpenCV
+      if: steps.cache-opencv-macos.outputs.cache-hit != 'true'
+      working-directory: cpp
+      run: |
+        mkdir -p .source
+        cd .source
+        wget -q -O opencv.zip https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.zip
+        unzip -q opencv.zip
+        cd opencv-${OPENCV_VERSION}
+        mkdir build && cd build
+        cmake -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX=../../opencv-${OPENCV_VERSION} \
+              -DBUILD_LIST=core,imgproc,imgcodecs \
+              -DBUILD_SHARED_LIBS=ON \
+              -DBUILD_TESTS=OFF \
+              -DBUILD_PERF_TESTS=OFF \
+              -DBUILD_EXAMPLES=OFF \
+              -DWITH_FFMPEG=OFF \
+              -DWITH_GTK=OFF \
+              -DWITH_V4L=OFF \
+              -DWITH_OPENEXR=OFF \
+              -DCMAKE_OSX_ARCHITECTURES=arm64 \
+              ..
+        cmake --build . --config Release -j$(sysctl -n hw.ncpu)
+        cmake --install .
+        cd ../..
+        rm -rf opencv-${OPENCV_VERSION}/build opencv.zip
+
+    - name: Cache OCR Models
+      id: cache-models-macos
+      uses: actions/cache@v3
+      with:
+        path: cpp/.source/models
+        key: ocr-models-v4
+
+    - name: Download OCR Models
+      if: steps.cache-models-macos.outputs.cache-hit != 'true'
+      working-directory: cpp
+      run: |
+        mkdir -p .source/models
+        cd .source/models
+
+        # Download Chinese OCR models
+        wget -q https://paddleocr.bj.bcebos.com/PP-OCRv4/chinese/ch_PP-OCRv4_det_infer.tar
+        tar -xf ch_PP-OCRv4_det_infer.tar
+        rm ch_PP-OCRv4_det_infer.tar
+
+        wget -q https://paddleocr.bj.bcebos.com/PP-OCRv4/chinese/ch_PP-OCRv4_rec_infer.tar
+        tar -xf ch_PP-OCRv4_rec_infer.tar
+        rm ch_PP-OCRv4_rec_infer.tar
+
+        wget -q https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar
+        tar -xf ch_ppocr_mobile_v2.0_cls_infer.tar
+        rm ch_ppocr_mobile_v2.0_cls_infer.tar
+
+        # Download dictionary
+        wget -q https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/ppocr_keys_v1.txt -O dict_chinese.txt
+
+        # Create config file
+        echo "det_model_dir=ch_PP-OCRv4_det_infer" > config_chinese.txt
+        echo "cls_model_dir=ch_ppocr_mobile_v2.0_cls_infer" >> config_chinese.txt
+        echo "rec_model_dir=ch_PP-OCRv4_rec_infer" >> config_chinese.txt
+        echo "rec_char_dict_path=dict_chinese.txt" >> config_chinese.txt
+
+    - name: Build PaddleOCR-json
+      working-directory: cpp
+      run: |
+        mkdir -p build && cd build
+        cmake .. \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DPADDLE_LIB=${GITHUB_WORKSPACE}/cpp/.source/paddle_inference \
+          -DOPENCV_DIR=${GITHUB_WORKSPACE}/cpp/.source/opencv-${OPENCV_VERSION} \
+          -DWITH_MKL=OFF \
+          -DWITH_GPU=OFF \
+          -DWITH_STATIC_LIB=OFF \
+          -DCMAKE_OSX_ARCHITECTURES=arm64
+        cmake --build . --config Release -j$(sysctl -n hw.ncpu)
+
+    - name: Package macOS Binary
+      run: |
+        cd cpp/build/bin
+        # Create a tar.gz with the executable and dylibs
+        tar -czf PaddleOCR-json-macos-arm64.tar.gz PaddleOCR-json *.dylib 2>/dev/null || tar -czf PaddleOCR-json-macos-arm64.tar.gz PaddleOCR-json
+        mv PaddleOCR-json-macos-arm64.tar.gz ${GITHUB_WORKSPACE}/
+
+    - name: Upload macOS Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: PaddleOCR-json-macos-arm64
+        path: PaddleOCR-json-macos-arm64.tar.gz
+        retention-days: 7
+
   create-release:
-    needs: [build-linux, build-windows]
+    needs: [build-linux, build-windows, build-macos-arm]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event.inputs.release_tag != ''
 
@@ -400,6 +566,12 @@ jobs:
         name: PaddleOCR-json-windows-x64
         path: ./artifacts
 
+    - name: Download macOS ARM64 Artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: PaddleOCR-json-macos-arm64
+        path: ./artifacts
+
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
@@ -418,6 +590,7 @@ jobs:
           ### Downloads
           - **Linux x64**: PaddleOCR-json-linux-x64.tar.gz
           - **Windows x64**: PaddleOCR-json-windows-x64.zip
+          - **macOS ARM64** (Apple Silicon): PaddleOCR-json-macos-arm64.tar.gz
 
           ### Usage
 
@@ -439,10 +612,12 @@ jobs:
           ### Requirements
           - Linux: Ubuntu 18.04+ or compatible
           - Windows: Windows 10+ with Visual C++ Redistributable 2022
+          - macOS: macOS 12+ on Apple Silicon (M1/M2/M3)
           - Models: Download from [PaddleOCR Model Zoo](https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.7/doc/doc_en/models_list_en.md)
         files: |
           ./artifacts/PaddleOCR-json-linux-x64.tar.gz
           ./artifacts/PaddleOCR-json-windows-x64.zip
+          ./artifacts/PaddleOCR-json-macos-arm64.tar.gz
         draft: false
         prerelease: false
       env:
