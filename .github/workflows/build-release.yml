@@ -375,72 +375,74 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Install Rosetta 2 for x86_64 emulation
+      run: |
+        # Install Rosetta 2 if not already installed (for running x86_64 binaries)
+        if ! /usr/bin/pgrep -q oahd; then
+          sudo softwareupdate --install-rosetta --agree-to-license || true
+        fi
+
     - name: Install dependencies
       run: |
-        brew install cmake wget libomp
+        brew install cmake wget
+        # Install x86_64 version of libomp via Rosetta
+        arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || true
+        arch -x86_64 /usr/local/bin/brew install libomp 2>/dev/null || true
 
     - name: Cache PaddlePaddle
       id: cache-paddle-macos
       uses: actions/cache@v3
       with:
         path: cpp/.source/paddle_inference
-        key: paddle-macos-arm64-${{ env.PADDLE_VERSION }}-v2
+        key: paddle-macos-x86_64-${{ env.PADDLE_VERSION }}-v3
 
-    - name: Download and Build PaddlePaddle Inference Library
+    - name: Download PaddlePaddle Inference Library
       if: steps.cache-paddle-macos.outputs.cache-hit != 'true'
       working-directory: cpp
       run: |
         mkdir -p .source
         cd .source
 
-        # PaddlePaddle doesn't provide official ARM64 macOS inference library
-        # We'll build a minimal version from source or use the CPU inference library
-        # For now, try to download the macOS x86_64 version and see if it works via Rosetta 2
-        # or build from source
+        # PaddlePaddle provides x86_64 macOS builds which work via Rosetta 2 on Apple Silicon
+        # This is the most reliable approach until native ARM64 builds are available
 
-        # Check if ARM64 macOS build is available
-        PADDLE_URL="https://paddle-inference-lib.bj.bcebos.com/${PADDLE_VERSION}/cxx_c/MacOS/CPU/arm64/paddle_inference.tgz"
+        # Try multiple possible URL patterns for macOS x86_64 build
+        URLS=(
+          "https://paddle-inference-lib.bj.bcebos.com/${PADDLE_VERSION}/cxx_c/MacOS/CPU/x86-64_clang_avx_openblas/paddle_inference.tgz"
+          "https://paddle-inference-lib.bj.bcebos.com/${PADDLE_VERSION}/cxx_c/MacOS/CPU/x86-64/paddle_inference.tgz"
+          "https://paddle-inference-lib.bj.bcebos.com/3.0.0-beta1/cxx_c/MacOS/CPU/x86-64_clang_openblas/paddle_inference.tgz"
+        )
 
-        if wget -q --spider "$PADDLE_URL" 2>/dev/null; then
-          echo "Downloading PaddlePaddle ARM64 macOS build..."
-          wget -q "$PADDLE_URL" -O paddle_inference.tgz
-          tar -xzf paddle_inference.tgz
-          rm paddle_inference.tgz
-        else
-          echo "ARM64 macOS build not available, building from source..."
+        DOWNLOADED=false
+        for URL in "${URLS[@]}"; do
+          echo "Trying: $URL"
+          if wget -q --spider "$URL" 2>/dev/null; then
+            echo "Downloading PaddlePaddle x86_64 macOS build..."
+            wget -q "$URL" -O paddle_inference.tgz
+            tar -xzf paddle_inference.tgz
+            rm paddle_inference.tgz
+            DOWNLOADED=true
+            break
+          fi
+        done
 
-          # Clone and build PaddlePaddle inference library
-          git clone --depth 1 --branch v${PADDLE_VERSION} https://github.com/PaddlePaddle/Paddle.git paddle_src
-          cd paddle_src
-
-          mkdir build && cd build
-          cmake .. \
-            -DWITH_GPU=OFF \
-            -DWITH_MKL=OFF \
-            -DWITH_TESTING=OFF \
-            -DWITH_PYTHON=OFF \
-            -DON_INFER=ON \
-            -DCMAKE_BUILD_TYPE=Release
-
-          cmake --build . --target paddle_inference --config Release -j$(sysctl -n hw.ncpu)
-
-          # Install to the expected location
-          mkdir -p ../../paddle_inference
-          cp -r paddle_inference_install_dir/* ../../paddle_inference/
-
-          cd ../..
-          rm -rf paddle_src
+        if [ "$DOWNLOADED" = false ]; then
+          echo "No pre-built macOS PaddlePaddle available. Checking release page..."
+          # List available builds from the release page
+          echo "Please check: https://www.paddlepaddle.org.cn/inference/master/guides/install/download_lib.html"
+          exit 1
         fi
 
         # Verify the installation
-        ls -la paddle_inference/
+        echo "PaddlePaddle directory contents:"
+        ls -la paddle_inference/ || ls -la
 
     - name: Cache OpenCV
       id: cache-opencv-macos
       uses: actions/cache@v3
       with:
         path: cpp/.source/opencv-4.5.4
-        key: opencv-macos-arm64-${{ env.OPENCV_VERSION }}-v2
+        key: opencv-macos-x86_64-${{ env.OPENCV_VERSION }}-v3
 
     - name: Download and Build OpenCV
       if: steps.cache-opencv-macos.outputs.cache-hit != 'true'
@@ -452,7 +454,8 @@ jobs:
         unzip -q opencv.zip
         cd opencv-${OPENCV_VERSION}
         mkdir build && cd build
-        cmake -DCMAKE_BUILD_TYPE=Release \
+        # Build for x86_64 to match PaddlePaddle library (runs via Rosetta 2)
+        arch -x86_64 cmake -DCMAKE_BUILD_TYPE=Release \
               -DCMAKE_INSTALL_PREFIX=../../opencv-${OPENCV_VERSION} \
               -DBUILD_LIST=core,imgproc,imgcodecs \
               -DBUILD_SHARED_LIBS=ON \
@@ -463,9 +466,9 @@ jobs:
               -DWITH_GTK=OFF \
               -DWITH_V4L=OFF \
               -DWITH_OPENEXR=OFF \
-              -DCMAKE_OSX_ARCHITECTURES=arm64 \
+              -DCMAKE_OSX_ARCHITECTURES=x86_64 \
               ..
-        cmake --build . --config Release -j$(sysctl -n hw.ncpu)
+        arch -x86_64 cmake --build . --config Release -j$(sysctl -n hw.ncpu)
         cmake --install .
         cd ../..
         rm -rf opencv-${OPENCV_VERSION}/build opencv.zip
@@ -510,28 +513,30 @@ jobs:
       working-directory: cpp
       run: |
         mkdir -p build && cd build
-        cmake .. \
+        # Build for x86_64 to match PaddlePaddle library (runs via Rosetta 2 on Apple Silicon)
+        arch -x86_64 cmake .. \
           -DCMAKE_BUILD_TYPE=Release \
           -DPADDLE_LIB=${GITHUB_WORKSPACE}/cpp/.source/paddle_inference \
           -DOPENCV_DIR=${GITHUB_WORKSPACE}/cpp/.source/opencv-${OPENCV_VERSION} \
           -DWITH_MKL=OFF \
           -DWITH_GPU=OFF \
           -DWITH_STATIC_LIB=OFF \
-          -DCMAKE_OSX_ARCHITECTURES=arm64
-        cmake --build . --config Release -j$(sysctl -n hw.ncpu)
+          -DCMAKE_OSX_ARCHITECTURES=x86_64
+        arch -x86_64 cmake --build . --config Release -j$(sysctl -n hw.ncpu)
 
     - name: Package macOS Binary
       run: |
         cd cpp/build/bin
         # Create a tar.gz with the executable and dylibs
-        tar -czf PaddleOCR-json-macos-arm64.tar.gz PaddleOCR-json *.dylib 2>/dev/null || tar -czf PaddleOCR-json-macos-arm64.tar.gz PaddleOCR-json
-        mv PaddleOCR-json-macos-arm64.tar.gz ${GITHUB_WORKSPACE}/
+        # x86_64 binary works on both Intel Macs and Apple Silicon (via Rosetta 2)
+        tar -czf PaddleOCR-json-macos-x64.tar.gz PaddleOCR-json *.dylib 2>/dev/null || tar -czf PaddleOCR-json-macos-x64.tar.gz PaddleOCR-json
+        mv PaddleOCR-json-macos-x64.tar.gz ${GITHUB_WORKSPACE}/
 
     - name: Upload macOS Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: PaddleOCR-json-macos-arm64
-        path: PaddleOCR-json-macos-arm64.tar.gz
+        name: PaddleOCR-json-macos-x64
+        path: PaddleOCR-json-macos-x64.tar.gz
         retention-days: 7
 
   create-release:
@@ -566,10 +571,10 @@ jobs:
         name: PaddleOCR-json-windows-x64
         path: ./artifacts
 
-    - name: Download macOS ARM64 Artifact
+    - name: Download macOS x64 Artifact
       uses: actions/download-artifact@v4
       with:
-        name: PaddleOCR-json-macos-arm64
+        name: PaddleOCR-json-macos-x64
         path: ./artifacts
 
     - name: Create Release
@@ -590,7 +595,7 @@ jobs:
           ### Downloads
           - **Linux x64**: PaddleOCR-json-linux-x64.tar.gz
           - **Windows x64**: PaddleOCR-json-windows-x64.zip
-          - **macOS ARM64** (Apple Silicon): PaddleOCR-json-macos-arm64.tar.gz
+          - **macOS x64**: PaddleOCR-json-macos-x64.tar.gz (works on Intel and Apple Silicon via Rosetta 2)
 
           ### Usage
 
@@ -612,12 +617,12 @@ jobs:
           ### Requirements
           - Linux: Ubuntu 18.04+ or compatible
           - Windows: Windows 10+ with Visual C++ Redistributable 2022
-          - macOS: macOS 12+ on Apple Silicon (M1/M2/M3)
+          - macOS: macOS 10.15+ (Intel or Apple Silicon with Rosetta 2)
           - Models: Download from [PaddleOCR Model Zoo](https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.7/doc/doc_en/models_list_en.md)
         files: |
           ./artifacts/PaddleOCR-json-linux-x64.tar.gz
           ./artifacts/PaddleOCR-json-windows-x64.zip
-          ./artifacts/PaddleOCR-json-macos-arm64.tar.gz
+          ./artifacts/PaddleOCR-json-macos-x64.tar.gz
         draft: false
         prerelease: false
       env:
