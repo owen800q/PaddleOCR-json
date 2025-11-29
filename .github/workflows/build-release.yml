@@ -186,8 +186,8 @@ jobs:
       id: cache-opencv-windows
       uses: actions/cache@v3
       with:
-        path: cpp/.source/opencv-install
-        key: opencv-windows-${{ env.OPENCV_VERSION }}-vs2022
+        path: cpp/.source/opencv-build
+        key: opencv-windows-${{ env.OPENCV_VERSION }}-vs2022-build
 
     - name: Download and Build OpenCV
       if: steps.cache-opencv-windows.outputs.cache-hit != 'true'
@@ -232,14 +232,21 @@ jobs:
         # Install OpenCV
         cmake --install . --config Release
 
-        # Clean up source and build files to save cache space
+        # Move build directory to preserve it for CMake config
         cd ../..
+        Move-Item -Path "opencv-${env:OPENCV_VERSION}/build" -Destination "opencv-build" -Force
+
+        # Clean up source files to save cache space
         Remove-Item -Recurse -Force opencv-${env:OPENCV_VERSION}
         Remove-Item opencv.zip
 
-        # Debug: Show OpenCV install structure
-        Write-Host "OpenCV install structure:"
-        Get-ChildItem -Path opencv-install -Recurse -Depth 3 | Select-Object FullName
+        # Debug: Show OpenCV build directory structure
+        Write-Host "OpenCV build directory structure:"
+        Get-ChildItem -Path opencv-build -Depth 2 | Select-Object FullName
+
+        # Check for OpenCVConfig.cmake location
+        Write-Host "`nSearching for OpenCVConfig.cmake:"
+        Get-ChildItem -Path opencv-build -Filter "OpenCVConfig.cmake" -Recurse | Select-Object FullName
 
     - name: Cache OCR Models
       id: cache-models-windows
@@ -289,12 +296,28 @@ jobs:
           -A x64 ^
           -DCMAKE_BUILD_TYPE=Release ^
           -DPADDLE_LIB=%GITHUB_WORKSPACE%\cpp\.source\paddle_inference ^
-          -DOPENCV_DIR=%GITHUB_WORKSPACE%\cpp\.source\opencv-install ^
-          -DCMAKE_PREFIX_PATH=%GITHUB_WORKSPACE%\cpp\.source\opencv-install ^
+          -DOPENCV_DIR=%GITHUB_WORKSPACE%\cpp\.source\opencv-build ^
           -DWITH_MKL=ON ^
           -DWITH_GPU=OFF ^
           -DWITH_STATIC_LIB=ON
         cmake --build . --config Release -j %NUMBER_OF_PROCESSORS%
+
+    - name: Copy OpenCV DLLs to output
+      working-directory: cpp
+      shell: pwsh
+      run: |
+        # Copy OpenCV DLLs from build/bin/Release to output directory
+        $opencvDlls = Get-ChildItem -Path ".source/opencv-build/bin/Release" -Filter "*.dll" -ErrorAction SilentlyContinue
+        if ($opencvDlls) {
+            Write-Host "Copying OpenCV DLLs to output directory"
+            Copy-Item -Path ".source/opencv-build/bin/Release/*.dll" -Destination "build/bin/Release/" -Force
+        }
+        # Also check for DLLs in lib/Release
+        $opencvLibDlls = Get-ChildItem -Path ".source/opencv-build/lib/Release" -Filter "*.dll" -ErrorAction SilentlyContinue
+        if ($opencvLibDlls) {
+            Write-Host "Copying OpenCV lib DLLs to output directory"
+            Copy-Item -Path ".source/opencv-build/lib/Release/*.dll" -Destination "build/bin/Release/" -Force
+        }
 
     - name: Package Windows Binary
       working-directory: cpp/build/bin/Release
