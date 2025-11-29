@@ -17,7 +17,7 @@ env:
 
 jobs:
   build-linux:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Checkout code
@@ -166,7 +166,7 @@ jobs:
       uses: actions/cache@v3
       with:
         path: cpp/.source/paddle_inference
-        key: paddle-windows-${{ env.PADDLE_VERSION }}-mkl
+        key: paddle-windows-${{ env.PADDLE_VERSION }}-mkl-v3
 
     - name: Download PaddlePaddle Inference Library
       if: steps.cache-paddle-windows.outputs.cache-hit != 'true'
@@ -179,15 +179,21 @@ jobs:
         $url = "https://paddle-inference-lib.bj.bcebos.com/3.0.0-beta1/cxx_c/Windows/CPU/x86-64_avx-mkl-vs2019/paddle_inference.zip"
         Write-Host "Downloading PaddlePaddle from: $url"
         Invoke-WebRequest -Uri $url -OutFile paddle_inference.zip
-        Expand-Archive -Path paddle_inference.zip -DestinationPath .
+        Write-Host "`nExtracting paddle_inference.zip..."
+        # Extract to paddle_inference subdirectory to match expected structure
+        Expand-Archive -Path paddle_inference.zip -DestinationPath paddle_inference -Force
+        Write-Host "`nContents of paddle_inference directory after extraction:"
+        Get-ChildItem -Path paddle_inference | Select-Object Name, Mode
+        Write-Host "`nVerifying paddle_api.h location:"
+        Get-ChildItem -Path paddle_inference -Recurse -Filter "paddle_api.h" -ErrorAction SilentlyContinue | Select-Object FullName
         Remove-Item paddle_inference.zip
 
     - name: Cache OpenCV
       id: cache-opencv-windows
       uses: actions/cache@v3
       with:
-        path: cpp/.source/opencv-4.5.4
-        key: opencv-windows-${{ env.OPENCV_VERSION }}-vs2022
+        path: cpp/.source/opencv-install
+        key: opencv-windows-${{ env.OPENCV_VERSION }}-vs2022-install
 
     - name: Download and Build OpenCV
       if: steps.cache-opencv-windows.outputs.cache-hit != 'true'
@@ -210,7 +216,7 @@ jobs:
           -G "Visual Studio 17 2022" `
           -A x64 `
           -DCMAKE_BUILD_TYPE=Release `
-          -DCMAKE_INSTALL_PREFIX="../../opencv-${env:OPENCV_VERSION}" `
+          -DCMAKE_INSTALL_PREFIX="../../opencv-install" `
           -DBUILD_LIST="core,imgproc,imgcodecs" `
           -DBUILD_SHARED_LIBS=ON `
           -DBUILD_TESTS=OFF `
@@ -232,10 +238,19 @@ jobs:
         # Install OpenCV
         cmake --install . --config Release
 
-        # Clean up build files to save cache space
+        # Clean up source and build directories to save cache space
+        # Only keep opencv-install which has everything we need
         cd ../..
-        Remove-Item -Recurse -Force opencv-${env:OPENCV_VERSION}/build
+        Remove-Item -Recurse -Force opencv-${env:OPENCV_VERSION}
         Remove-Item opencv.zip
+
+        # Verify install directory structure
+        Write-Host "`nOpenCV install directory contents:"
+        Get-ChildItem -Path opencv-install -Depth 1 | Select-Object FullName
+
+        # Verify OpenCVConfig.cmake exists in install directory
+        Write-Host "`nSearching for OpenCVConfig.cmake in install directory:"
+        Get-ChildItem -Path opencv-install -Filter "OpenCVConfig.cmake" -Recurse | Select-Object FullName
 
     - name: Cache OCR Models
       id: cache-models-windows
@@ -278,6 +293,34 @@ jobs:
       working-directory: cpp
       shell: cmd
       run: |
+        echo ========================================
+        echo Debugging Directory Structure
+        echo ========================================
+        echo.
+        echo Contents of .source directory:
+        dir .source
+        echo.
+        echo OpenCV install directory:
+        dir /s /b .source\opencv-install\OpenCVConfig.cmake
+        echo.
+        echo Checking if paddle_inference directory exists:
+        if exist .source\paddle_inference (
+          echo paddle_inference directory EXISTS
+          dir .source\paddle_inference
+        ) else (
+          echo paddle_inference directory DOES NOT EXIST
+          echo Listing all subdirectories in .source:
+          dir .source /AD
+        )
+        echo.
+        echo Searching for paddle_api.h recursively in .source:
+        dir /s /b .source\*paddle_api.h* 2>nul || echo paddle_api.h not found anywhere in .source
+        echo.
+        echo ========================================
+        echo Starting CMake Configuration
+        echo ========================================
+        echo.
+
         mkdir build
         cd build
         cmake .. ^
@@ -285,11 +328,32 @@ jobs:
           -A x64 ^
           -DCMAKE_BUILD_TYPE=Release ^
           -DPADDLE_LIB=%GITHUB_WORKSPACE%\cpp\.source\paddle_inference ^
-          -DOPENCV_DIR=%GITHUB_WORKSPACE%\cpp\.source\opencv-4.5.4 ^
+          -DOpenCV_DIR=%GITHUB_WORKSPACE%\cpp\.source\opencv-install\lib ^
           -DWITH_MKL=ON ^
           -DWITH_GPU=OFF ^
           -DWITH_STATIC_LIB=ON
         cmake --build . --config Release -j %NUMBER_OF_PROCESSORS%
+
+    - name: Copy OpenCV DLLs to output
+      working-directory: cpp
+      shell: pwsh
+      run: |
+        # Copy OpenCV DLLs from install directory
+        # Check common install locations
+        if (Test-Path ".source/opencv-install/bin") {
+            $opencvDlls = Get-ChildItem -Path ".source/opencv-install/bin" -Filter "*.dll" -ErrorAction SilentlyContinue
+            if ($opencvDlls) {
+                Write-Host "Copying OpenCV DLLs from install/bin to output directory"
+                Copy-Item -Path ".source/opencv-install/bin/*.dll" -Destination "build/bin/Release/" -Force
+            }
+        }
+        if (Test-Path ".source/opencv-install/x64/vc17/bin") {
+            $opencvDlls = Get-ChildItem -Path ".source/opencv-install/x64/vc17/bin" -Filter "*.dll" -ErrorAction SilentlyContinue
+            if ($opencvDlls) {
+                Write-Host "Copying OpenCV DLLs from install/x64/vc17/bin to output directory"
+                Copy-Item -Path ".source/opencv-install/x64/vc17/bin/*.dll" -Destination "build/bin/Release/" -Force
+            }
+        }
 
     - name: Package Windows Binary
       working-directory: cpp/build/bin/Release
