@@ -166,7 +166,7 @@ jobs:
       uses: actions/cache@v3
       with:
         path: cpp/.source/paddle_inference
-        key: paddle-windows-${{ env.PADDLE_VERSION }}-mkl-v2
+        key: paddle-windows-${{ env.PADDLE_VERSION }}-mkl-v3
 
     - name: Download PaddlePaddle Inference Library
       if: steps.cache-paddle-windows.outputs.cache-hit != 'true'
@@ -180,11 +180,12 @@ jobs:
         Write-Host "Downloading PaddlePaddle from: $url"
         Invoke-WebRequest -Uri $url -OutFile paddle_inference.zip
         Write-Host "`nExtracting paddle_inference.zip..."
-        Expand-Archive -Path paddle_inference.zip -DestinationPath . -Force
-        Write-Host "`nContents of .source directory after extraction:"
-        Get-ChildItem -Path . | Select-Object Name, Mode
-        Write-Host "`nSearching for paddle_api.h in extracted files:"
-        Get-ChildItem -Path . -Recurse -Filter "paddle_api.h" -ErrorAction SilentlyContinue | Select-Object FullName
+        # Extract to paddle_inference subdirectory to match expected structure
+        Expand-Archive -Path paddle_inference.zip -DestinationPath paddle_inference -Force
+        Write-Host "`nContents of paddle_inference directory after extraction:"
+        Get-ChildItem -Path paddle_inference | Select-Object Name, Mode
+        Write-Host "`nVerifying paddle_api.h location:"
+        Get-ChildItem -Path paddle_inference -Recurse -Filter "paddle_api.h" -ErrorAction SilentlyContinue | Select-Object FullName
         Remove-Item paddle_inference.zip
 
     - name: Cache OpenCV
