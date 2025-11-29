@@ -186,7 +186,9 @@ jobs:
       id: cache-opencv-windows
       uses: actions/cache@v3
       with:
-        path: cpp/.source/opencv-build
+        path: |
+          cpp/.source/opencv-build
+          cpp/.source/opencv-install
         key: opencv-windows-${{ env.OPENCV_VERSION }}-vs2022-build
 
     - name: Download and Build OpenCV
@@ -236,9 +238,14 @@ jobs:
         cd ../..
         Move-Item -Path "opencv-${env:OPENCV_VERSION}/build" -Destination "opencv-build" -Force
 
-        # Clean up source files to save cache space
+        # Keep opencv-install directory (it was created by cmake --install)
+        # Clean up only source files to save cache space
         Remove-Item -Recurse -Force opencv-${env:OPENCV_VERSION}
         Remove-Item opencv.zip
+
+        # Verify install directory structure
+        Write-Host "`nOpenCV install directory contents:"
+        Get-ChildItem -Path opencv-install -Depth 1 | Select-Object FullName
 
         # Debug: Show OpenCV build directory structure
         Write-Host "OpenCV build directory structure:"
@@ -297,6 +304,7 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release ^
           -DPADDLE_LIB=%GITHUB_WORKSPACE%\cpp\.source\paddle_inference ^
           -DOPENCV_DIR=%GITHUB_WORKSPACE%\cpp\.source\opencv-build ^
+          -DCMAKE_PREFIX_PATH=%GITHUB_WORKSPACE%\cpp\.source\opencv-install;%GITHUB_WORKSPACE%\cpp\.source\opencv-build ^
           -DWITH_MKL=ON ^
           -DWITH_GPU=OFF ^
           -DWITH_STATIC_LIB=ON
@@ -306,17 +314,29 @@ jobs:
       working-directory: cpp
       shell: pwsh
       run: |
-        # Copy OpenCV DLLs from build/bin/Release to output directory
-        $opencvDlls = Get-ChildItem -Path ".source/opencv-build/bin/Release" -Filter "*.dll" -ErrorAction SilentlyContinue
-        if ($opencvDlls) {
-            Write-Host "Copying OpenCV DLLs to output directory"
-            Copy-Item -Path ".source/opencv-build/bin/Release/*.dll" -Destination "build/bin/Release/" -Force
+        # Copy OpenCV DLLs from install directory
+        if (Test-Path ".source/opencv-install/bin") {
+            $opencvDlls = Get-ChildItem -Path ".source/opencv-install/bin" -Filter "*.dll" -ErrorAction SilentlyContinue
+            if ($opencvDlls) {
+                Write-Host "Copying OpenCV DLLs from install/bin to output directory"
+                Copy-Item -Path ".source/opencv-install/bin/*.dll" -Destination "build/bin/Release/" -Force
+            }
         }
-        # Also check for DLLs in lib/Release
-        $opencvLibDlls = Get-ChildItem -Path ".source/opencv-build/lib/Release" -Filter "*.dll" -ErrorAction SilentlyContinue
-        if ($opencvLibDlls) {
-            Write-Host "Copying OpenCV lib DLLs to output directory"
-            Copy-Item -Path ".source/opencv-build/lib/Release/*.dll" -Destination "build/bin/Release/" -Force
+        # Also check x64/vc17/bin structure (typical for Windows builds)
+        if (Test-Path ".source/opencv-install/x64/vc17/bin") {
+            $opencvDlls = Get-ChildItem -Path ".source/opencv-install/x64/vc17/bin" -Filter "*.dll" -ErrorAction SilentlyContinue
+            if ($opencvDlls) {
+                Write-Host "Copying OpenCV DLLs from install/x64/vc17/bin to output directory"
+                Copy-Item -Path ".source/opencv-install/x64/vc17/bin/*.dll" -Destination "build/bin/Release/" -Force
+            }
+        }
+        # Fallback: check build directory
+        if (Test-Path ".source/opencv-build/bin/Release") {
+            $opencvBuildDlls = Get-ChildItem -Path ".source/opencv-build/bin/Release" -Filter "*.dll" -ErrorAction SilentlyContinue
+            if ($opencvBuildDlls) {
+                Write-Host "Copying OpenCV DLLs from build/bin/Release to output directory"
+                Copy-Item -Path ".source/opencv-build/bin/Release/*.dll" -Destination "build/bin/Release/" -Force
+            }
         }
 
     - name: Package Windows Binary
