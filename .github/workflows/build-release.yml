@@ -287,8 +287,29 @@ jobs:
       working-directory: cpp
       shell: cmd
       run: |
-        echo Checking for OpenCVConfig.cmake location...
+        echo ========================================
+        echo Debugging Directory Structure
+        echo ========================================
+        echo.
+        echo OpenCV install directory:
         dir /s /b .source\opencv-install\OpenCVConfig.cmake
+        echo.
+        echo PaddlePaddle root directory contents:
+        dir .source\paddle_inference
+        echo.
+        echo Checking paddle subdirectory:
+        dir .source\paddle_inference\paddle 2>nul || echo paddle subdirectory not found
+        echo.
+        echo Checking paddle\include subdirectory:
+        dir .source\paddle_inference\paddle\include 2>nul || echo paddle\include subdirectory not found
+        echo.
+        echo Searching for paddle_api.h recursively:
+        dir /s /b .source\paddle_inference\*paddle_api.h* 2>nul || echo paddle_api.h not found anywhere
+        echo.
+        echo ========================================
+        echo Starting CMake Configuration
+        echo ========================================
+        echo.
 
         mkdir build
         cd build
