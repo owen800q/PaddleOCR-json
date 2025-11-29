@@ -237,6 +237,10 @@ jobs:
         Remove-Item -Recurse -Force opencv-${env:OPENCV_VERSION}/build
         Remove-Item opencv.zip
 
+        # Debug: Show OpenCV install structure
+        Write-Host "OpenCV install structure:"
+        Get-ChildItem -Path opencv-${env:OPENCV_VERSION} -Recurse -Depth 2 | Select-Object FullName
+
     - name: Cache OCR Models
       id: cache-models-windows
       uses: actions/cache@v3
@@ -286,6 +290,7 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release ^
           -DPADDLE_LIB=%GITHUB_WORKSPACE%\cpp\.source\paddle_inference ^
           -DOPENCV_DIR=%GITHUB_WORKSPACE%\cpp\.source\opencv-4.5.4 ^
+          -DOpenCV_DIR=%GITHUB_WORKSPACE%\cpp\.source\opencv-4.5.4 ^
           -DWITH_MKL=ON ^
           -DWITH_GPU=OFF ^
           -DWITH_STATIC_LIB=ON
