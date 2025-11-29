@@ -189,7 +189,7 @@ jobs:
         path: |
           cpp/.source/opencv-build
           cpp/.source/opencv-install
-        key: opencv-windows-${{ env.OPENCV_VERSION }}-vs2022-build
+        key: opencv-windows-${{ env.OPENCV_VERSION }}-vs2022-build-v2
 
     - name: Download and Build OpenCV
       if: steps.cache-opencv-windows.outputs.cache-hit != 'true'
@@ -304,7 +304,7 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release ^
           -DPADDLE_LIB=%GITHUB_WORKSPACE%\cpp\.source\paddle_inference ^
           -DOPENCV_DIR=%GITHUB_WORKSPACE%\cpp\.source\opencv-build ^
-          -DCMAKE_PREFIX_PATH=%GITHUB_WORKSPACE%\cpp\.source\opencv-install;%GITHUB_WORKSPACE%\cpp\.source\opencv-build ^
+          -DCMAKE_PREFIX_PATH="%GITHUB_WORKSPACE%\cpp\.source\opencv-install;%GITHUB_WORKSPACE%\cpp\.source\opencv-build" ^
           -DWITH_MKL=ON ^
           -DWITH_GPU=OFF ^
           -DWITH_STATIC_LIB=ON
