@@ -297,7 +297,7 @@ jobs:
           -A x64 ^
           -DCMAKE_BUILD_TYPE=Release ^
           -DPADDLE_LIB=%GITHUB_WORKSPACE%\cpp\.source\paddle_inference ^
-          -DOpenCV_DIR=%GITHUB_WORKSPACE%\cpp\.source\opencv-install\x64\vc17\lib ^
+          -DOpenCV_DIR=%GITHUB_WORKSPACE%\cpp\.source\opencv-install\lib ^
           -DWITH_MKL=ON ^
           -DWITH_GPU=OFF ^
           -DWITH_STATIC_LIB=ON
