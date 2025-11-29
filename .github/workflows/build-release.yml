@@ -179,7 +179,12 @@ jobs:
         $url = "https://paddle-inference-lib.bj.bcebos.com/3.0.0-beta1/cxx_c/Windows/CPU/x86-64_avx-mkl-vs2019/paddle_inference.zip"
         Write-Host "Downloading PaddlePaddle from: $url"
         Invoke-WebRequest -Uri $url -OutFile paddle_inference.zip
-        Expand-Archive -Path paddle_inference.zip -DestinationPath .
+        Write-Host "`nExtracting paddle_inference.zip..."
+        Expand-Archive -Path paddle_inference.zip -DestinationPath . -Force
+        Write-Host "`nContents of .source directory after extraction:"
+        Get-ChildItem -Path . | Select-Object Name, Mode
+        Write-Host "`nSearching for paddle_api.h in extracted files:"
+        Get-ChildItem -Path . -Recurse -Filter "paddle_api.h" -ErrorAction SilentlyContinue | Select-Object FullName
         Remove-Item paddle_inference.zip
 
     - name: Cache OpenCV
@@ -291,20 +296,24 @@ jobs:
         echo Debugging Directory Structure
         echo ========================================
         echo.
+        echo Contents of .source directory:
+        dir .source
+        echo.
         echo OpenCV install directory:
         dir /s /b .source\opencv-install\OpenCVConfig.cmake
         echo.
-        echo PaddlePaddle root directory contents:
-        dir .source\paddle_inference
+        echo Checking if paddle_inference directory exists:
+        if exist .source\paddle_inference (
+          echo paddle_inference directory EXISTS
+          dir .source\paddle_inference
+        ) else (
+          echo paddle_inference directory DOES NOT EXIST
+          echo Listing all subdirectories in .source:
+          dir .source /AD
+        )
         echo.
-        echo Checking paddle subdirectory:
-        dir .source\paddle_inference\paddle 2>nul || echo paddle subdirectory not found
-        echo.
-        echo Checking paddle\include subdirectory:
-        dir .source\paddle_inference\paddle\include 2>nul || echo paddle\include subdirectory not found
-        echo.
-        echo Searching for paddle_api.h recursively:
-        dir /s /b .source\paddle_inference\*paddle_api.h* 2>nul || echo paddle_api.h not found anywhere
+        echo Searching for paddle_api.h recursively in .source:
+        dir /s /b .source\*paddle_api.h* 2>nul || echo paddle_api.h not found anywhere in .source
         echo.
         echo ========================================
         echo Starting CMake Configuration
