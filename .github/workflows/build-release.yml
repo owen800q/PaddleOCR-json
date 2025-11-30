@@ -562,13 +562,11 @@ jobs:
           fi
         done
 
-        # Create run script
-        cat > run.sh << 'RUNSCRIPT'
-#!/bin/bash
-SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-export DYLD_LIBRARY_PATH="$SCRIPT_DIR/lib:$DYLD_LIBRARY_PATH"
-"$SCRIPT_DIR/bin/PaddleOCR-json" -models_path="$SCRIPT_DIR/models" "$@"
-RUNSCRIPT
+        # Create run script using echo to avoid YAML heredoc issues
+        echo '#!/bin/bash' > run.sh
+        echo 'SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )' >> run.sh
+        echo 'export DYLD_LIBRARY_PATH="$SCRIPT_DIR/lib:$DYLD_LIBRARY_PATH"' >> run.sh
+        echo '"$SCRIPT_DIR/bin/PaddleOCR-json" -models_path="$SCRIPT_DIR/models" "$@"' >> run.sh
         chmod +x run.sh
 
         # Create the package
