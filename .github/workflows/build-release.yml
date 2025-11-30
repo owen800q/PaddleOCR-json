@@ -384,7 +384,7 @@ jobs:
       uses: actions/cache@v3
       with:
         path: cpp/.source/paddle_inference
-        key: paddle-macos-arm64-3.0.0-v4
+        key: paddle-macos-arm64-2.4.0-v5
 
     - name: Download PaddlePaddle Inference Library
       if: steps.cache-paddle-macos.outputs.cache-hit != 'true'
@@ -393,14 +393,17 @@ jobs:
         mkdir -p .source
         cd .source
 
-        # PaddlePaddle 3.0.0 provides native M1 (ARM64) macOS build
-        # URL from: https://www.paddlepaddle.org.cn/inference/master/guides/install/download_lib.html
-        PADDLE_URL="https://paddle-inference-lib.bj.bcebos.com/3.0.0/cxx_c/MacOS/m1_clang_noavx_accelerate_blas/paddle_inference.tgz"
+        # PaddlePaddle 2.4.0 provides native M1 (ARM64) macOS build with OpenBLAS
+        # URL from: https://github.com/PaddlePaddle/Paddle-Inference-Demo/blob/master/docs/user_guides/download_lib.md
+        PADDLE_URL="https://paddle-inference-lib.bj.bcebos.com/2.4.0/cxx_c/MacOS/m1_clang_noavx_openblas/paddle_inference_install_dir.tgz"
 
         echo "Downloading PaddlePaddle ARM64 macOS build from: $PADDLE_URL"
-        wget -q "$PADDLE_URL" -O paddle_inference.tgz
+        wget "$PADDLE_URL" -O paddle_inference.tgz
         tar -xzf paddle_inference.tgz
         rm paddle_inference.tgz
+
+        # Rename directory to match expected name
+        mv paddle_inference_install_dir paddle_inference
 
         # Verify the installation
         echo "PaddlePaddle directory contents:"
