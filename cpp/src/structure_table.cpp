@@ -160,10 +160,13 @@ namespace PaddleOCR
             {
                 config.EnableMKLDNN();
             }
+#if !defined(__APPLE__)
+            // DisableMKLDNN() is not available in PaddlePaddle 2.4.0 and MKLDNN is Intel-only
             else
             {
                 config.DisableMKLDNN();
             }
+#endif
             config.SetCpuMathLibraryNumThreads(this->cpu_math_library_num_threads_);
         }
 
