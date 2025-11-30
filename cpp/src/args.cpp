@@ -32,7 +32,11 @@ DEFINE_int32(gpu_id, 0, "Device id of GPU to execute.");                        
 DEFINE_int32(gpu_mem, 4000, "GPU memory when infering with GPU.");                                     // 申请的GPU内存
 DEFINE_int32(cpu_threads, 10, "Num of threads with CPU.");                                             // CPU线程
 DEFINE_int32(cpu_mem, 2000, "CPU memory limit in MB. Cleanup if exceeded. -1 means no limit.");        // CPU内存占用上限，单位MB。-1表示不限制
+#if defined(__APPLE__) && defined(__aarch64__)
+DEFINE_bool(enable_mkldnn, false, "Whether use mkldnn with CPU.");                                     // MKLDNN is Intel-only, disabled by default on macOS ARM
+#else
 DEFINE_bool(enable_mkldnn, true, "Whether use mkldnn with CPU.");                                      // true时启用mkldnn
+#endif
 DEFINE_string(precision, "fp32", "Precision be one of fp32/fp16/int8");                                // 预测的精度，支持fp32, fp16, int8 3种输入
 DEFINE_bool(enable_benchmark, false, "Whether use benchmark.");                                        // true时开启benchmark，对预测速度、显存占用等进行统计 (renamed to avoid conflict with PaddlePaddle internal flag)
 DEFINE_string(output, "./output/", "Save benchmark log path.");                                        // 可视化结果保存的路径 TODO
