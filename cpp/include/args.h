@@ -32,7 +32,7 @@ DECLARE_int32(cpu_threads);
 DECLARE_int32(cpu_mem);
 DECLARE_bool(enable_mkldnn);
 DECLARE_string(precision);
-DECLARE_bool(benchmark);
+DECLARE_bool(enable_benchmark);
 DECLARE_string(output);
 DECLARE_string(type);
 DECLARE_string(config_path);
