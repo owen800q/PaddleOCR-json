@@ -156,6 +156,18 @@ endif()
 include_directories(${OpenCV_INCLUDE_DIRS})
 
 
+# OpenSSL for HTTPS support in httplib
+find_package(OpenSSL QUIET)
+if(OPENSSL_FOUND)
+    message(STATUS "OpenSSL found: ${OPENSSL_VERSION}")
+    message(STATUS "OpenSSL include: ${OPENSSL_INCLUDE_DIR}")
+    add_definitions(-DCPPHTTPLIB_OPENSSL_SUPPORT)
+    include_directories(${OPENSSL_INCLUDE_DIR})
+else()
+    message(STATUS "OpenSSL not found - HTTPS support disabled")
+endif()
+
+
 # PaddleOCR
 include_directories("${PADDLE_LIB}/paddle/include")
 link_directories("${PADDLE_LIB}/paddle/lib")
@@ -371,6 +383,10 @@ if (NOT WIN32)
     # Add pthread explicitly for cpp-httplib
     find_package(Threads REQUIRED)
     set(DEPS ${DEPS} Threads::Threads)
+    # Add OpenSSL if found
+    if(OPENSSL_FOUND)
+        set(DEPS ${DEPS} OpenSSL::SSL OpenSSL::Crypto)
+    endif()
 endif()
 
 # 在find_package时已经指定了需要加载的模块，

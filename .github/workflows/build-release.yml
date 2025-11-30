@@ -377,7 +377,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        brew install cmake wget libomp
+        brew install cmake wget libomp openssl@3
 
     - name: Cache PaddlePaddle
       id: cache-paddle-macos
@@ -489,6 +489,7 @@ jobs:
         mkdir -p build && cd build
         # Build for ARM64 (native Apple Silicon)
         # Add CMAKE_POLICY_VERSION_MINIMUM for compatibility with newer CMake
+        # Add OpenSSL for HTTPS support in URL fetching
         cmake .. \
           -DCMAKE_BUILD_TYPE=Release \
           -DPADDLE_LIB=${GITHUB_WORKSPACE}/cpp/.source/paddle_inference \
@@ -497,7 +498,8 @@ jobs:
           -DWITH_GPU=OFF \
           -DWITH_STATIC_LIB=OFF \
           -DCMAKE_OSX_ARCHITECTURES=arm64 \
-          -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+          -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+          -DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3)
         cmake --build . --config Release -j$(sysctl -n hw.ncpu)
 
     - name: Package macOS Binary
@@ -517,6 +519,11 @@ jobs:
 
         # Copy OpenCV libraries
         cp -R .source/opencv-${OPENCV_VERSION}/lib/*.dylib package/lib/ 2>/dev/null || true
+
+        # Copy OpenSSL libraries for HTTPS support
+        OPENSSL_PREFIX=$(brew --prefix openssl@3)
+        cp -L ${OPENSSL_PREFIX}/lib/libssl*.dylib package/lib/ 2>/dev/null || true
+        cp -L ${OPENSSL_PREFIX}/lib/libcrypto*.dylib package/lib/ 2>/dev/null || true
 
         # Copy models and config
         cp -R .source/models/* package/models/
