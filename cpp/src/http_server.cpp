@@ -24,6 +24,10 @@ namespace PaddleOCR
 
         // Setup routes
         setup_routes();
+
+        // Set idle interval for better macOS compatibility
+        // This enables select() polling instead of blocking accept()
+        server_.set_idle_interval(0, 100000); // 100ms idle interval
     }
 
     void HttpServer::setup_routes()
@@ -257,7 +261,7 @@ namespace PaddleOCR
         std::cout << "Version: " << PROJECT_VER << std::endl;
         std::cout << "========================================" << std::endl;
         std::cout << std::endl;
-        std::cout << "Server listening on 0.0.0.0:" << port_ << std::endl;
+        std::cout << "Server binding to 127.0.0.1:" << port_ << std::endl;
         std::cout << std::endl;
         std::cout << "API Endpoints:" << std::endl;
         std::cout << "  POST http://localhost:" << port_ << "/api/ocr         - Upload image for OCR" << std::endl;
@@ -271,8 +275,14 @@ namespace PaddleOCR
         std::cout << "Press Ctrl+C to stop the server" << std::endl;
         std::cout << "========================================" << std::endl;
         std::cout << std::endl;
+        std::cout.flush();
 
-        server_.listen("0.0.0.0", port_);
+        // Bind to 127.0.0.1 for better macOS compatibility
+        if (!server_.listen("127.0.0.1", port_)) {
+            std::cerr << "Failed to start server on 127.0.0.1:" << port_ << std::endl;
+            std::cerr << "Trying 0.0.0.0..." << std::endl;
+            server_.listen("0.0.0.0", port_);
+        }
     }
 
     void HttpServer::stop()
