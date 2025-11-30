@@ -569,6 +569,18 @@ jobs:
         echo '"$SCRIPT_DIR/bin/PaddleOCR-json" -models_path="$SCRIPT_DIR/models" "$@"' >> run.sh
         chmod +x run.sh
 
+        # Ad-hoc code sign all binaries to avoid Gatekeeper warnings
+        echo "Code signing all binaries..."
+        for dylib in lib/*.dylib; do
+          if [ -f "$dylib" ]; then
+            codesign --force --sign - "$dylib" 2>/dev/null || true
+          fi
+        done
+        codesign --force --sign - bin/PaddleOCR-json 2>/dev/null || true
+
+        # Remove quarantine attributes
+        xattr -cr .
+
         # Create the package
         cd ..
         tar -czf PaddleOCR-json-macos-arm64.tar.gz -C package .
