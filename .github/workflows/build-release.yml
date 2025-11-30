@@ -488,6 +488,7 @@ jobs:
       run: |
         mkdir -p build && cd build
         # Build for ARM64 (native Apple Silicon)
+        # Add CMAKE_POLICY_VERSION_MINIMUM for compatibility with newer CMake
         cmake .. \
           -DCMAKE_BUILD_TYPE=Release \
           -DPADDLE_LIB=${GITHUB_WORKSPACE}/cpp/.source/paddle_inference \
@@ -495,7 +496,8 @@ jobs:
           -DWITH_MKL=OFF \
           -DWITH_GPU=OFF \
           -DWITH_STATIC_LIB=OFF \
-          -DCMAKE_OSX_ARCHITECTURES=arm64
+          -DCMAKE_OSX_ARCHITECTURES=arm64 \
+          -DCMAKE_POLICY_VERSION_MINIMUM=3.5
         cmake --build . --config Release -j$(sysctl -n hw.ncpu)
 
     - name: Package macOS Binary
