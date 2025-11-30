@@ -1,12 +1,11 @@
-Usage Manual (macOS x64)
+Usage Manual (macOS ARM64 / Apple Silicon)
 
 Thanks for downloading & using PaddleOCR-json engine (https://github.com/hiroi-sora/PaddleOCR-json).
 
 # Requirements
 
-- macOS 10.15 (Catalina) or later
-- Intel Mac: Runs natively
-- Apple Silicon Mac (M1/M2/M3): Runs via Rosetta 2 emulation
+- macOS 12.0 (Monterey) or later
+- Apple Silicon (M1/M2/M3) Mac
 
 # Running the Engine
 
@@ -23,15 +22,6 @@ Or run with custom arguments:
 To start the HTTP server:
 
     ./run.sh --server --server_port=8080
-
-# Apple Silicon (M1/M2/M3) Notes
-
-This is an x86_64 binary that runs on Apple Silicon Macs via Rosetta 2 emulation.
-Rosetta 2 is automatically installed when you first run an x86_64 app on Apple Silicon.
-
-If you see a message about installing Rosetta, click "Install" to proceed.
-
-Performance on Apple Silicon is good thanks to Rosetta 2's efficient translation.
 
 # Troubleshooting
 
@@ -59,23 +49,18 @@ Or run this command to remove the quarantine attribute:
 
 If you see an error about libomp.dylib, install it via Homebrew:
 
-    # For Intel Mac:
     brew install libomp
-
-    # For Apple Silicon Mac (install Intel version via Rosetta):
-    arch -x86_64 /usr/local/bin/brew install libomp
 
 ---
 
-使用手册 (macOS x64)
+使用手册 (macOS ARM64 / Apple Silicon)
 
 感谢下载使用PaddleOCR-json引擎。
 
 # 运行要求
 
-- macOS 10.15 (Catalina) 或更新版本
-- Intel Mac：原生运行
-- Apple Silicon Mac (M1/M2/M3)：通过 Rosetta 2 模拟运行
+- macOS 12.0 (Monterey) 或更新版本
+- Apple Silicon (M1/M2/M3) Mac
 
 # 运行引擎
 
@@ -92,15 +77,6 @@ If you see an error about libomp.dylib, install it via Homebrew:
 启动 HTTP 服务器：
 
     ./run.sh --server --server_port=8080
-
-# Apple Silicon (M1/M2/M3) 说明
-
-这是一个 x86_64 二进制文件，在 Apple Silicon Mac 上通过 Rosetta 2 模拟运行。
-首次运行 x86_64 应用时，Rosetta 2 会自动安装。
-
-如果看到安装 Rosetta 的提示，请点击"安装"继续。
-
-得益于 Rosetta 2 高效的转译，在 Apple Silicon 上的性能表现良好。
 
 # 常见问题
 
@@ -127,8 +103,4 @@ If you see an error about libomp.dylib, install it via Homebrew:
 
 如果出现关于 libomp.dylib 的错误，请通过 Homebrew 安装：
 
-    # Intel Mac:
     brew install libomp
-
-    # Apple Silicon Mac（安装 Intel 版本）:
-    arch -x86_64 /usr/local/bin/brew install libomp
