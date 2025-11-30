@@ -29,11 +29,13 @@ namespace PaddleOCR
         // Route handlers
         void handle_ocr_upload(const httplib::Request &req, httplib::Response &res);
         void handle_ocr_base64(const httplib::Request &req, httplib::Response &res);
+        void handle_ocr_url(const httplib::Request &req, httplib::Response &res);
         void handle_health(const httplib::Request &req, httplib::Response &res);
         void handle_version(const httplib::Request &req, httplib::Response &res);
 
         // Helper methods
         cv::Mat decode_image_from_bytes(const std::string &data);
+        cv::Mat download_image_from_url(const std::string &url, std::string &error);
         std::string create_error_response(int code, const std::string &message);
         void setup_routes();
         void log_request(const std::string &method, const std::string &path, int status, long duration_ms);
