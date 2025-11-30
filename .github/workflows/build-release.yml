@@ -501,11 +501,79 @@ jobs:
         cmake --build . --config Release -j$(sysctl -n hw.ncpu)
 
     - name: Package macOS Binary
+      working-directory: cpp
       run: |
-        cd cpp/build/bin
-        # Create a tar.gz with the executable and dylibs
-        # Native ARM64 binary for Apple Silicon (M1/M2/M3)
-        tar -czf PaddleOCR-json-macos-arm64.tar.gz PaddleOCR-json *.dylib 2>/dev/null || tar -czf PaddleOCR-json-macos-arm64.tar.gz PaddleOCR-json
+        # Create package directory structure
+        mkdir -p package/bin package/lib package/models
+
+        # Copy executable
+        cp build/bin/PaddleOCR-json package/bin/
+
+        # Copy PaddlePaddle libraries
+        cp -R .source/paddle_inference/paddle/lib/*.dylib package/lib/ 2>/dev/null || true
+
+        # Copy third-party libraries from paddle_inference
+        find .source/paddle_inference/third_party -name "*.dylib" -exec cp {} package/lib/ \; 2>/dev/null || true
+
+        # Copy OpenCV libraries
+        cp -R .source/opencv-${OPENCV_VERSION}/lib/*.dylib package/lib/ 2>/dev/null || true
+
+        # Copy models and config
+        cp -R .source/models/* package/models/
+
+        # Fix library paths using install_name_tool
+        cd package
+
+        # Get the executable
+        EXEC="bin/PaddleOCR-json"
+
+        # Change rpath to use @executable_path/../lib
+        install_name_tool -add_rpath @executable_path/../lib "$EXEC" 2>/dev/null || true
+
+        # Fix all dylib references in the executable
+        for dylib in lib/*.dylib; do
+          if [ -f "$dylib" ]; then
+            libname=$(basename "$dylib")
+            # Try to change the library path in the executable
+            old_path=$(otool -L "$EXEC" | grep "$libname" | awk '{print $1}' | head -1)
+            if [ -n "$old_path" ]; then
+              install_name_tool -change "$old_path" "@rpath/$libname" "$EXEC" 2>/dev/null || true
+            fi
+          fi
+        done
+
+        # Also fix the id of each dylib and their dependencies
+        for dylib in lib/*.dylib; do
+          if [ -f "$dylib" ]; then
+            libname=$(basename "$dylib")
+            # Set the install name to use @rpath
+            install_name_tool -id "@rpath/$libname" "$dylib" 2>/dev/null || true
+
+            # Fix dependencies within dylibs
+            for dep in lib/*.dylib; do
+              if [ -f "$dep" ]; then
+                depname=$(basename "$dep")
+                old_dep=$(otool -L "$dylib" | grep "$depname" | awk '{print $1}' | head -1)
+                if [ -n "$old_dep" ] && [ "$old_dep" != "@rpath/$depname" ]; then
+                  install_name_tool -change "$old_dep" "@rpath/$depname" "$dylib" 2>/dev/null || true
+                fi
+              fi
+            done
+          fi
+        done
+
+        # Create run script
+        cat > run.sh << 'RUNSCRIPT'
+#!/bin/bash
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+export DYLD_LIBRARY_PATH="$SCRIPT_DIR/lib:$DYLD_LIBRARY_PATH"
+"$SCRIPT_DIR/bin/PaddleOCR-json" -models_path="$SCRIPT_DIR/models" "$@"
+RUNSCRIPT
+        chmod +x run.sh
+
+        # Create the package
+        cd ..
+        tar -czf PaddleOCR-json-macos-arm64.tar.gz -C package .
         mv PaddleOCR-json-macos-arm64.tar.gz ${GITHUB_WORKSPACE}/
 
     - name: Upload macOS Artifact
