@@ -34,7 +34,7 @@ DEFINE_int32(cpu_threads, 10, "Num of threads with CPU.");                      
 DEFINE_int32(cpu_mem, 2000, "CPU memory limit in MB. Cleanup if exceeded. -1 means no limit.");        // CPU内存占用上限，单位MB。-1表示不限制
 DEFINE_bool(enable_mkldnn, true, "Whether use mkldnn with CPU.");                                      // true时启用mkldnn
 DEFINE_string(precision, "fp32", "Precision be one of fp32/fp16/int8");                                // 预测的精度，支持fp32, fp16, int8 3种输入
-DEFINE_bool(benchmark, false, "Whether use benchmark.");                                               // true时开启benchmark，对预测速度、显存占用等进行统计
+DEFINE_bool(enable_benchmark, false, "Whether use benchmark.");                                        // true时开启benchmark，对预测速度、显存占用等进行统计 (renamed to avoid conflict with PaddlePaddle internal flag)
 DEFINE_string(output, "./output/", "Save benchmark log path.");                                        // 可视化结果保存的路径 TODO
 DEFINE_string(type, "ocr", "Perform ocr or structure, the value is selected in ['ocr','structure']."); // 任务类型（暂不可用）
 DEFINE_string(config_path, "", "Path of config file.");                                                // 配置文件路径

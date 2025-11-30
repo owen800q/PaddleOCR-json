@@ -34,7 +34,7 @@ void structure(std::vector<cv::String> &cv_all_img_names)
 {
     PaddleOCR::PaddleStructure engine;
 
-    if (FLAGS_benchmark)
+    if (FLAGS_enable_benchmark)
     {
         engine.reset_timer();
     }
@@ -90,7 +90,7 @@ void structure(std::vector<cv::String> &cv_all_img_names)
             }
         }
     }
-    if (FLAGS_benchmark)
+    if (FLAGS_enable_benchmark)
     {
         engine.benchmark_log(cv_all_img_names.size());
     }
