@@ -414,7 +414,7 @@ jobs:
       uses: actions/cache@v3
       with:
         path: cpp/.source/opencv-4.5.4
-        key: opencv-macos-arm64-${{ env.OPENCV_VERSION }}-v4
+        key: opencv-macos-arm64-${{ env.OPENCV_VERSION }}-v5
 
     - name: Download and Build OpenCV
       if: steps.cache-opencv-macos.outputs.cache-hit != 'true'
@@ -427,6 +427,7 @@ jobs:
         cd opencv-${OPENCV_VERSION}
         mkdir build && cd build
         # Build for ARM64 (native Apple Silicon)
+        # Add CMAKE_POLICY_VERSION_MINIMUM for compatibility with newer CMake
         cmake -DCMAKE_BUILD_TYPE=Release \
               -DCMAKE_INSTALL_PREFIX=../../opencv-${OPENCV_VERSION} \
               -DBUILD_LIST=core,imgproc,imgcodecs \
@@ -439,6 +440,7 @@ jobs:
               -DWITH_V4L=OFF \
               -DWITH_OPENEXR=OFF \
               -DCMAKE_OSX_ARCHITECTURES=arm64 \
+              -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
               ..
         cmake --build . --config Release -j$(sysctl -n hw.ncpu)
         cmake --install .
